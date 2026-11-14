@@ -485,7 +485,11 @@ def streaming_quantize(model, tokenizer, calib_text, had_block,
     torch.cuda.synchronize(); t0 = time.perf_counter()
     embed = model.model.embed_tokens.to(dev)
     H_dim = embed.weight.shape[1]
-    hidden = torch.empty(1, T, H_dim, dtype=torch.float16, device=dev)
+    # Keep the activation buffer in the checkpoint dtype. A hard-coded
+    # float16 buffer raises a dtype-mismatch error on bfloat16/float32
+    # checkpoints (RMSNorm promotes fp16 x bf16 to fp32) and silently
+    # downcasts float32 models.
+    hidden = torch.empty(1, T, H_dim, dtype=embed.weight.dtype, device=dev)
     with torch.no_grad():
         for i in range(0, T, chunk_tokens):
             hidden[:, i:i + chunk_tokens] = embed(ids[:, i:i + chunk_tokens])
